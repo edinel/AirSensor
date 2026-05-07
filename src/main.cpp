@@ -158,6 +158,7 @@ void setupWebServer() {
 // ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
+  delay(2000);  // give USB CDC time to connect before any output
 
   if (!sht30.begin(0x44)) {
     log_e("SHT30 not found");
@@ -167,6 +168,7 @@ void setup() {
 
   connectToWifi();
   mqtt.setServer(mqttServer, MQTT_PORT);
+  mqtt.setBufferSize(512);
   reconnectMQTT();
   setupWebServer();
 }
@@ -185,8 +187,10 @@ void loop() {
   g_temperature = sht30.readTemperature();
   g_humidity    = sht30.readHumidity();
 
-  if (isnan(g_temperature) || isnan(g_humidity)) {
-    log_e("SHT30 read failed");
+  if (isnan(g_temperature) || isnan(g_humidity) ||
+      g_temperature < -40.0f || g_temperature > 125.0f ||
+      g_humidity < 0.0f || g_humidity > 100.0f) {
+    log_e("SHT30 read out of range: temp=%.1f hum=%.1f", g_temperature, g_humidity);
     return;
   }
 
