@@ -5,16 +5,15 @@
 #include <WiFi.h>
 #include "arduino_secrets.h"
 
-// Change both when deploying a new unit
-#define HOSTNAME  "air-sensor"   // used for WiFi hostname, MQTT topics, HA device name
-#define DEVICE_ID "air_sensor"   // same value, hyphens replaced with underscores (HA unique_id safe)
+#define HOSTNAME  "air-sensor"
+#define DEVICE_ID "air_sensor"  // HOSTNAME with hyphens → underscores; change both together
 #define MQTT_PORT 1883
 
 static const unsigned long UPDATE_INTERVAL_MS     = 30000;
 static const unsigned long WIFI_CHECK_INTERVAL_MS = 30000;
 static const unsigned long MQTT_RETRY_INTERVAL_MS = 5000;
 
-// Home Assistant MQTT discovery + state topics — all derived from HOSTNAME/HOSTNAME
+// Home Assistant MQTT discovery + state topics — all derived from HOSTNAME/DEVICE_ID
 static const char* DISCO_TEMP  = "homeassistant/sensor/" HOSTNAME "/temperature/config";
 static const char* DISCO_HUMID = "homeassistant/sensor/" HOSTNAME "/humidity/config";
 static const char* STATE_TEMP  = HOSTNAME "/sensor/temperature/state";
@@ -73,8 +72,8 @@ void publishDiscovery() {
     "\"state_topic\":\"%s\","
     "\"unit_of_measurement\":\"°F\","
     "\"device_class\":\"temperature\","
-    "\"unique_id\":\"" DEVICE_ID "_temperature\","
-    "\"device\":{\"identifiers\":[\"" HOSTNAME "\"],\"name\":\"" HOSTNAME "\","
+    "\"unique_id\":\"airsensor_temperature\","
+    "\"device\":{\"identifiers\":[\"airsensor\"],\"name\":\"Air Sensor\","
     "\"model\":\"XIAO ESP32-C3 + SHT30\",\"manufacturer\":\"DIY\"}}",
     STATE_TEMP);
   mqtt.publish(DISCO_TEMP, payload, true);
@@ -84,8 +83,8 @@ void publishDiscovery() {
     "\"state_topic\":\"%s\","
     "\"unit_of_measurement\":\"%%\","
     "\"device_class\":\"humidity\","
-    "\"unique_id\":\"" DEVICE_ID "_humidity\","
-    "\"device\":{\"identifiers\":[\"" HOSTNAME "\"],\"name\":\"" HOSTNAME "\","
+    "\"unique_id\":\"airsensor_humidity\","
+    "\"device\":{\"identifiers\":[\"airsensor\"],\"name\":\"Air Sensor\","
     "\"model\":\"XIAO ESP32-C3 + SHT30\",\"manufacturer\":\"DIY\"}}",
     STATE_HUMID);
   mqtt.publish(DISCO_HUMID, payload, true);
@@ -158,7 +157,6 @@ void setupWebServer() {
 // ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  delay(2000);  // give USB CDC time to connect before any output
 
   if (!sht30.begin(0x44)) {
     log_e("SHT30 not found");
@@ -168,7 +166,6 @@ void setup() {
 
   connectToWifi();
   mqtt.setServer(mqttServer, MQTT_PORT);
-  mqtt.setBufferSize(512);
   reconnectMQTT();
   setupWebServer();
 }
@@ -187,10 +184,8 @@ void loop() {
   g_temperature = sht30.readTemperature();
   g_humidity    = sht30.readHumidity();
 
-  if (isnan(g_temperature) || isnan(g_humidity) ||
-      g_temperature < -40.0f || g_temperature > 125.0f ||
-      g_humidity < 0.0f || g_humidity > 100.0f) {
-    log_e("SHT30 read out of range: temp=%.1f hum=%.1f", g_temperature, g_humidity);
+  if (isnan(g_temperature) || isnan(g_humidity)) {
+    log_e("SHT30 read failed");
     return;
   }
 
