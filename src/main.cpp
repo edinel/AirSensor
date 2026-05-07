@@ -72,8 +72,8 @@ void publishDiscovery() {
     "\"state_topic\":\"%s\","
     "\"unit_of_measurement\":\"°F\","
     "\"device_class\":\"temperature\","
-    "\"unique_id\":\"airsensor_temperature\","
-    "\"device\":{\"identifiers\":[\"airsensor\"],\"name\":\"Air Sensor\","
+    "\"unique_id\":\"" DEVICE_ID "_temperature\","
+    "\"device\":{\"identifiers\":[\"" HOSTNAME "\"],\"name\":\"" HOSTNAME "\","
     "\"model\":\"XIAO ESP32-C3 + SHT30\",\"manufacturer\":\"DIY\"}}",
     STATE_TEMP);
   mqtt.publish(DISCO_TEMP, payload, true);
@@ -83,8 +83,8 @@ void publishDiscovery() {
     "\"state_topic\":\"%s\","
     "\"unit_of_measurement\":\"%%\","
     "\"device_class\":\"humidity\","
-    "\"unique_id\":\"airsensor_humidity\","
-    "\"device\":{\"identifiers\":[\"airsensor\"],\"name\":\"Air Sensor\","
+    "\"unique_id\":\"" DEVICE_ID "_humidity\","
+    "\"device\":{\"identifiers\":[\"" HOSTNAME "\"],\"name\":\"" HOSTNAME "\","
     "\"model\":\"XIAO ESP32-C3 + SHT30\",\"manufacturer\":\"DIY\"}}",
     STATE_HUMID);
   mqtt.publish(DISCO_HUMID, payload, true);
@@ -157,6 +157,7 @@ void setupWebServer() {
 // ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
+  delay(2000);  // give USB CDC time to connect before any output
 
   if (!sht30.begin(0x44)) {
     log_e("SHT30 not found");
@@ -166,6 +167,7 @@ void setup() {
 
   connectToWifi();
   mqtt.setServer(mqttServer, MQTT_PORT);
+  mqtt.setBufferSize(512);
   reconnectMQTT();
   setupWebServer();
 }
@@ -184,8 +186,10 @@ void loop() {
   g_temperature = sht30.readTemperature();
   g_humidity    = sht30.readHumidity();
 
-  if (isnan(g_temperature) || isnan(g_humidity)) {
-    log_e("SHT30 read failed");
+  if (isnan(g_temperature) || isnan(g_humidity) ||
+      g_temperature < -40.0f || g_temperature > 125.0f ||
+      g_humidity < 0.0f || g_humidity > 100.0f) {
+    log_e("SHT30 read out of range: temp=%.1f hum=%.1f", g_temperature, g_humidity);
     return;
   }
 
