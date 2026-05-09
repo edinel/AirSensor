@@ -1,9 +1,18 @@
 #include <Adafruit_SHT31.h>
 #include <Arduino.h>
+#include <GxEPD2_BW.h>
 #include <PsychicHttp.h>
 #include <PubSubClient.h>
+#include <SPI.h>
 #include <WiFi.h>
 #include "arduino_secrets.h"
+#include "JosefinSans-18Bold.h"
+#include "JosefinSans9.h"
+
+#define EPD_CS   5   // D3
+#define EPD_DC   4   // D2
+#define EPD_RST  3   // D1
+#define EPD_BUSY 21  // D6
 
 #define HOSTNAME  "air-sensor"
 #define DEVICE_ID "air_sensor"  // HOSTNAME with hyphens → underscores; change both together
@@ -23,6 +32,7 @@ Adafruit_SHT31    sht30;
 PsychicHttpServer server;
 WiFiClient        wifiClient;
 PubSubClient      mqtt(wifiClient);
+GxEPD2_BW<GxEPD2_290_GDEY029T94, GxEPD2_290_GDEY029T94::HEIGHT> epd(GxEPD2_290_GDEY029T94(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
 float g_temperature = 0.0f;
 float g_humidity    = 0.0f;
@@ -153,17 +163,83 @@ void setupWebServer() {
 
 
 // ---------------------------------------------------------------------------
+// E-paper display
+// ---------------------------------------------------------------------------
+void updateDisplay() {
+  static float lastTemp  = NAN;
+  static float lastHumid = NAN;
+
+  if (!isnan(lastTemp) && !isnan(lastHumid) &&
+      fabsf(g_temperature - lastTemp)  < 0.05f &&
+      fabsf(g_humidity    - lastHumid) < 0.05f) return;
+
+  lastTemp  = g_temperature;
+  lastHumid = g_humidity;
+
+  float tempF = g_temperature * 9.0f / 5.0f + 32.0f;
+  char buf[16];
+
+  epd.setRotation(1);  // landscape: 296 wide x 128 tall
+  epd.setFullWindow();
+  epd.firstPage();
+  do {
+    epd.fillScreen(GxEPD_BLACK);
+    epd.setTextColor(GxEPD_WHITE);
+
+    epd.setFont(&JosefinSans_Regular9pt7b);
+    epd.setCursor(8, 18);
+    epd.print("Temperature");
+
+    epd.setFont(&JosefinSans_Bold18pt7b);
+    snprintf(buf, sizeof(buf), "%.1f F", tempF);
+    epd.setCursor(8, 70);
+    epd.print(buf);
+
+    epd.drawLine(148, 4, 148, 124, GxEPD_WHITE);
+
+    epd.setFont(&JosefinSans_Regular9pt7b);
+    epd.setCursor(158, 18);
+    epd.print("Humidity");
+
+    epd.setFont(&JosefinSans_Bold18pt7b);
+    snprintf(buf, sizeof(buf), "%.1f %%", g_humidity);
+    epd.setCursor(158, 70);
+    epd.print(buf);
+
+  } while (epd.nextPage());
+  epd.hibernate();
+}
+
+
+// ---------------------------------------------------------------------------
 // Setup / Loop
 // ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
   delay(2000);  // give USB CDC time to connect before any output
 
+  pinMode(EPD_CS,   OUTPUT);
+  pinMode(EPD_DC,   OUTPUT);
+  pinMode(EPD_RST,  OUTPUT);
+  pinMode(EPD_BUSY, INPUT);
+  SPI.begin(8, 9, 10);  // SCK=GPIO8, MISO=GPIO9, MOSI=GPIO10
+  epd.init(115200, true, 20);
+  log_i("EPD OK");
+
   if (!sht30.begin(0x44)) {
     log_e("SHT30 not found");
     while (1) delay(10);
   }
   log_i("SHT30 OK");
+
+  for (int i = 0; i < 5; i++) {
+    g_temperature = sht30.readTemperature();
+    g_humidity    = sht30.readHumidity();
+    if (!isnan(g_temperature) && !isnan(g_humidity) &&
+        g_temperature >= -40.0f && g_temperature <= 125.0f &&
+        g_humidity >= 0.0f && g_humidity <= 100.0f) { updateDisplay(); break; }
+    delay(500);
+  }
 
   connectToWifi();
   mqtt.setServer(mqttServer, MQTT_PORT);
@@ -196,5 +272,6 @@ void loop() {
   log_i("Temp: %.1fC (%.1fF)  Humidity: %.1f%%",
     g_temperature, g_temperature * 9.0f / 5.0f + 32.0f, g_humidity);
 
+  updateDisplay();
   publishSensorData();
 }
