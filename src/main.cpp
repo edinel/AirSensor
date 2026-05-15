@@ -84,7 +84,7 @@ void publishDiscovery() {
     "\"device_class\":\"temperature\","
     "\"unique_id\":\"" DEVICE_ID "_temperature\","
     "\"device\":{\"identifiers\":[\"" HOSTNAME "\"],\"name\":\"" HOSTNAME "\","
-    "\"model\":\"XIAO ESP32-C3 + SHT30\",\"manufacturer\":\"DIY\"}}",
+    "\"model\":\"XIAO ESP32-C6 + SHT30\",\"manufacturer\":\"DIY\"}}",
     STATE_TEMP);
   mqtt.publish(DISCO_TEMP, payload, true);
 
@@ -95,7 +95,7 @@ void publishDiscovery() {
     "\"device_class\":\"humidity\","
     "\"unique_id\":\"" DEVICE_ID "_humidity\","
     "\"device\":{\"identifiers\":[\"" HOSTNAME "\"],\"name\":\"" HOSTNAME "\","
-    "\"model\":\"XIAO ESP32-C3 + SHT30\",\"manufacturer\":\"DIY\"}}",
+    "\"model\":\"XIAO ESP32-C6 + SHT30\",\"manufacturer\":\"DIY\"}}",
     STATE_HUMID);
   mqtt.publish(DISCO_HUMID, payload, true);
 
@@ -218,13 +218,8 @@ void setup() {
   Serial.begin(115200);
   delay(2000);  // give USB CDC time to connect before any output
 
-  pinMode(EPD_CS,   OUTPUT);
-  pinMode(EPD_DC,   OUTPUT);
-  pinMode(EPD_RST,  OUTPUT);
-  pinMode(EPD_BUSY, INPUT);
-  SPI.begin(8, 9, 10);  // SCK=GPIO8, MISO=GPIO9, MOSI=GPIO10
-  epd.init(115200, true, 20);
-  log_i("EPD OK");
+  // E-paper not connected yet — skipping EPD init
+  // pinMode / SPI.begin / epd.init go here when display is wired up
 
   if (!sht30.begin(0x44)) {
     log_e("SHT30 not found");
@@ -237,7 +232,7 @@ void setup() {
     g_humidity    = sht30.readHumidity();
     if (!isnan(g_temperature) && !isnan(g_humidity) &&
         g_temperature >= -40.0f && g_temperature <= 125.0f &&
-        g_humidity >= 0.0f && g_humidity <= 100.0f) { updateDisplay(); break; }
+        g_humidity >= 0.0f && g_humidity <= 100.0f) { break; }
     delay(500);
   }
 
@@ -272,6 +267,6 @@ void loop() {
   log_i("Temp: %.1fC (%.1fF)  Humidity: %.1f%%",
     g_temperature, g_temperature * 9.0f / 5.0f + 32.0f, g_humidity);
 
-  updateDisplay();
+  // updateDisplay();  // re-enable when EPD is wired up
   publishSensorData();
 }

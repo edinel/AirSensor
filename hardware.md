@@ -6,22 +6,36 @@ Seeed XIAO ESP32-C3
 
 ## Sensor
 
-SHT30 temperature/humidity breakout (I2C)
+KOOBOOK SHT30-D temperature/humidity breakout (I2C)
 
-## Wiring
+### Sensor wiring
 
-| Wire   | Signal | XIAO ESP32-C3 Pin |
-|--------|--------|-------------------|
-| Red    | VCC    | 3.3V              |
-| Black  | GND    | GND               |
-| Yellow | SCL    | D5 (GPIO7)        |
-| White  | SDA    | D4 (GPIO6)        |
+| Signal | XIAO ESP32-C3 Pin |
+|--------|-------------------|
+| VCC    | 3.3V              |
+| GND    | GND               |
+| SCL    | D5 (GPIO7)        |
+| SDA    | D4 (GPIO6)        |
 
 SHT30 I2C address: `0x44` (ADDR pin low/floating). Pull ADDR high for `0x45`.
 
 ## Display
 
-Waveshare 2.9inch e-Paper Module — 296×128, black/white, SPI, partial refresh
+Waveshare 2.9inch e-Paper Module — 296×128, black/white, SPI, partial refresh  
+Module PCB dimensions: 100mm × 36.8mm
+
+### Display wiring
+
+| Signal | XIAO ESP32-C3 Pin |
+|--------|-------------------|
+| DIN    | D10 (GPIO10, SPI MOSI) |
+| CLK    | D8 (GPIO8, SPI SCK)   |
+| CS     | D3 (GPIO5)            |
+| DC     | D2 (GPIO4)            |
+| RST    | D1 (GPIO3)            |
+| BUSY   | D6 (GPIO21)           |
+| VCC    | 3.3V                  |
+| GND    | GND                   |
 
 ## Enclosure
 
@@ -39,3 +53,18 @@ https://boxes.hackerspace-bamberg.de/ClosedBox?FingerJoint_style=rectangular&Fin
 
 - No external pull-up resistors needed; the Wire library enables internal pull-ups.
 - The XIAO's USB-C port powers the board and sensor from 3.3V regulated output.
+- BUSY pin moved to GPIO21 (D6) — GPIO2 is a strapping pin, unreliable as input.
+- E-paper module uses 4-line SPI (jumper confirmed on module).
+
+
+## Needed Updates.
+Window for the humidity box turns out to be the wrong size.
+Needs to be 
+* 32 mm short-side
+* 70 mm long-side
+
+An updated humidity box url is at:
+```text
+https://boxes.hackerspace-bamberg.de/ClosedBox?FingerJoint_style=rectangular&FingerJoint_surroundingspaces=2.0&FingerJoint_bottom_lip=0.0&FingerJoint_edge_width=1.0&FingerJoint_extra_length=0.0&FingerJoint_finger=1.0&FingerJoint_play=0.1&FingerJoint_space=1.0&FingerJoint_width=1.0&x=98&y=35&h=55&outside=0&thickness=3.2&burn=0&format=svg&labels=0&reference=100.0&tabs=0.0&qr_code=0&inner_corners=corner&spacing=0.5&debug=0&language=en&render=0
+
+and it's inside this directory as HumidityBox-2.svg 
