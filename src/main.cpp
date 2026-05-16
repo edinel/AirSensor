@@ -14,6 +14,7 @@
 #define EPD_RST  3   // D1
 #define EPD_BUSY 21  // D6
 
+
 #define HOSTNAME  "air-sensor"
 #define DEVICE_ID "air_sensor"  // HOSTNAME with hyphens → underscores; change both together
 #define MQTT_PORT 1883
@@ -25,8 +26,10 @@ static const unsigned long MQTT_RETRY_INTERVAL_MS = 5000;
 // Home Assistant MQTT discovery + state topics — all derived from HOSTNAME/DEVICE_ID
 static const char* DISCO_TEMP  = "homeassistant/sensor/" HOSTNAME "/temperature/config";
 static const char* DISCO_HUMID = "homeassistant/sensor/" HOSTNAME "/humidity/config";
+static const char* DISCO_BATT  = "homeassistant/sensor/" HOSTNAME "/battery/config";
 static const char* STATE_TEMP  = HOSTNAME "/sensor/temperature/state";
 static const char* STATE_HUMID = HOSTNAME "/sensor/humidity/state";
+static const char* STATE_BATT  = HOSTNAME "/sensor/battery/state";
 
 Adafruit_SHT31    sht30;
 PsychicHttpServer server;
@@ -36,6 +39,19 @@ GxEPD2_BW<GxEPD2_290_GDEY029T94, GxEPD2_290_GDEY029T94::HEIGHT> epd(GxEPD2_290_G
 
 float g_temperature = 0.0f;
 float g_humidity    = 0.0f;
+int   g_batteryPct  = -1;
+
+
+// ---------------------------------------------------------------------------
+// Battery
+// ---------------------------------------------------------------------------
+void readBattery() {
+  uint32_t vbatt = 0;
+  for (int i = 0; i < 16; i++) vbatt += analogReadMilliVolts(A0);
+  float voltage = 2.0f * vbatt / 16 / 1000.0f;
+  g_batteryPct = constrain((int)((voltage - 3.0f) / 1.2f * 100.0f), 0, 100);
+  log_i("Battery: %.2fV (%d%%)", voltage, g_batteryPct);
+}
 
 
 // ---------------------------------------------------------------------------
@@ -99,6 +115,17 @@ void publishDiscovery() {
     STATE_HUMID);
   mqtt.publish(DISCO_HUMID, payload, true);
 
+  snprintf(payload, sizeof(payload),
+    "{\"name\":\"Battery\","
+    "\"state_topic\":\"%s\","
+    "\"unit_of_measurement\":\"%%\","
+    "\"device_class\":\"battery\","
+    "\"unique_id\":\"" DEVICE_ID "_battery\","
+    "\"device\":{\"identifiers\":[\"" HOSTNAME "\"],\"name\":\"" HOSTNAME "\","
+    "\"model\":\"XIAO ESP32-C6 + SHT30\",\"manufacturer\":\"DIY\"}}",
+    STATE_BATT);
+  mqtt.publish(DISCO_BATT, payload, true);
+
   log_i("HA discovery published");
 }
 
@@ -130,6 +157,11 @@ void publishSensorData() {
 
   snprintf(buf, sizeof(buf), "%.1f", g_humidity);
   mqtt.publish(STATE_HUMID, buf);
+
+  if (g_batteryPct >= 0) {
+    snprintf(buf, sizeof(buf), "%d", g_batteryPct);
+    mqtt.publish(STATE_BATT, buf);
+  }
 }
 
 
@@ -145,16 +177,17 @@ void setupWebServer() {
       "<html><body><h2>Air Sensor</h2>"
       "<p>Temperature: %.1f F</p>"
       "<p>Humidity: %.1f %%</p>"
+      "<p>Battery: %d %%</p>"
       "</body></html>",
-      g_temperature * 9.0f / 5.0f + 32.0f, g_humidity);
+      g_temperature * 9.0f / 5.0f + 32.0f, g_humidity, g_batteryPct);
     return response->send(200, "text/html", html);
   });
 
   server.on("/status", HTTP_GET, [](PsychicRequest* request, PsychicResponse* response) {
-    char json[64];
+    char json[96];
     snprintf(json, sizeof(json),
-      "{\"temperature\":%.1f,\"humidity\":%.1f}",
-      g_temperature * 9.0f / 5.0f + 32.0f, g_humidity);
+      "{\"temperature\":%.1f,\"humidity\":%.1f,\"battery\":%d}",
+      g_temperature * 9.0f / 5.0f + 32.0f, g_humidity, g_batteryPct);
     return response->send(200, "application/json", json);
   });
 
@@ -236,6 +269,8 @@ void setup() {
     delay(500);
   }
 
+  pinMode(A0, INPUT);
+  readBattery();
   connectToWifi();
   mqtt.setServer(mqttServer, MQTT_PORT);
   mqtt.setBufferSize(512);
@@ -256,6 +291,7 @@ void loop() {
 
   g_temperature = sht30.readTemperature();
   g_humidity    = sht30.readHumidity();
+  readBattery();
 
   if (isnan(g_temperature) || isnan(g_humidity) ||
       g_temperature < -40.0f || g_temperature > 125.0f ||
